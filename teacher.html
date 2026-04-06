@@ -45,9 +45,10 @@
 </div>
 
 <script>
-    // ！！！请修改为您的 Cloudflare Worker 部署后的 URL ！！！
-    // 如果您的 Worker 和 Pages 部署在同一个域名下，或者您使用了 Cloudflare 的路由，可以将其设置为 ''
-    const API_URL = ''; // 例如 'https://dino-backend.yourname.workers.dev'
+    // 自动检测运行环境：如果是本地打开 (file://)，则使用远程部署地址；如果在 Pages 部署环境，则使用相对路径
+    const API_URL = window.location.protocol === 'file:' 
+        ? 'https://konglong-eju.pages.dev' 
+        : '';
     let errorCount = 0;
 
     async function loadStatistics(){
