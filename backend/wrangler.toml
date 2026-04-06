@@ -1,0 +1,10 @@
+name = "dino-backend"
+main = "index.js"
+compatibility_date = "2024-04-06"
+
+# 配置 KV 命名空间
+[[kv_namespaces]]
+binding = "RESULTS_KV"
+# 在部署前，您需要先创建一个 KV 命名空间，并在此处填入它的 ID
+# 命令：wrangler kv:namespace create RESULTS_KV
+# id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"

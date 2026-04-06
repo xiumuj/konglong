@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教师端 - 恐龙化石统计</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4ede4; margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 40px; padding: 20px 25px; }
+        h1 { color: #b45f2b; border-left: 10px solid #f39c12; padding-left: 20px; }
+        .stats-panel { display: flex; gap: 25px; margin: 20px 0; flex-wrap: wrap; }
+        .stat-card { background: #fef5e8; border-radius: 32px; padding: 15px 28px; text-align: center; flex: 1; min-width: 150px; }
+        .stat-number { font-size: 2.8rem; font-weight: bold; margin: 10px 0; }
+        .success { color: #2c7a2c; } .fail { color: #c0392b; }
+        .refresh-btn { background: #f39c12; border: none; padding: 8px 22px; border-radius: 40px; cursor: pointer; margin-left: 20px; }
+        .clear-btn { background: #e74c3c; border: none; padding: 8px 22px; border-radius: 40px; cursor: pointer; margin-left: 10px; color: white; font-weight: bold; }
+        .status-badge { background: #e67e22; color: white; padding: 4px 12px; border-radius: 20px; display: inline-block; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px; text-align: center; border-bottom: 1px solid #e0cfb5; }
+        th { background-color: #dba56d; color: white; }
+        .badge-correct { background-color: #2ecc71; color: white; padding: 4px 12px; border-radius: 30px; }
+        .badge-wrong { background-color: #e67e22; color: white; padding: 4px 12px; border-radius: 30px; }
+        .error-msg { color: red; margin-top: 10px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+        <h1>🦕 恐龙化石挑战 · 教师端统计</h1>
+        <div>
+            <span id="connStatus" class="status-badge">⏳ 连接中...</span>
+            <button id="manualRefreshBtn" class="refresh-btn">🔄 手动刷新</button>
+            <button id="clearDataBtn" class="clear-btn">🗑️ 清空数据</button>
+        </div>
+    </div>
+    <div class="stats-panel" id="statsPanel">
+        <div class="stat-card"><div>✅ 完全正确的小组</div><div class="stat-number success" id="successCount">0</div></div>
+        <div class="stat-card"><div>❌ 分类错误的小组</div><div class="stat-number fail" id="failCount">0</div></div>
+        <div class="stat-card"><div>📋 已提交小组总数</div><div class="stat-number" id="totalSubmit">0</div></div>
+    </div>
+    <h3>📊 各小组提交详情</h3>
+    <div style="overflow-x: auto;"><table id="resultTable"><thead><tr><th>小组编号</th><th>完成状态</th><th>提交时间</th></thead><tbody id="tableBody"><tr><td colspan="3">加载中...</td></tr></tbody></table></div>
+    <div id="errorMsg" class="error-msg"></div>
+</div>
+
+<script>
+    // ！！！请修改为您的 Cloudflare Worker 部署后的 URL ！！！
+    // 如果您的 Worker 和 Pages 部署在同一个域名下，或者您使用了 Cloudflare 的路由，可以将其设置为 ''
+    const API_URL = ''; // 例如 'https://dino-backend.yourname.workers.dev'
+    let errorCount = 0;
+
+    async function loadStatistics(){
+        const statusSpan = document.getElementById('connStatus');
+        const errorDiv = document.getElementById('errorMsg');
+        try {
+            const res = await fetch(`${API_URL}/api/results`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            const results = data.results || {};
+            const entries = Object.entries(results);
+            let success = 0, fail = 0;
+            entries.forEach(([_, v]) => { if(v.success) success++; else fail++; });
+            document.getElementById('successCount').innerText = success;
+            document.getElementById('failCount').innerText = fail;
+            document.getElementById('totalSubmit').innerText = entries.length;
+            const tbody = document.getElementById('tableBody');
+            if(entries.length === 0){ tbody.innerHTML = '<tr><td colspan="3">暂无提交记录</td></tr>'; }
+            else {
+                tbody.innerHTML = '';
+                entries.sort((a,b)=>parseInt(a[0])-parseInt(b[0])).forEach(([groupId, data])=>{
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td><strong>${groupId}</strong></td><td>${data.success ? '<span class="badge-correct">✓ 分类正确</span>' : '<span class="badge-wrong">✗ 分类错误</span>'}</td><td>${new Date(data.timestamp).toLocaleString()}</td>`;
+                    tbody.appendChild(tr);
+                });
+            }
+            statusSpan.innerText = '🟢 已连接';
+            statusSpan.style.backgroundColor = '#2ecc71';
+            errorDiv.innerText = '';
+            errorCount = 0;
+        } catch(e) {
+            console.error('加载失败:', e);
+            errorCount++;
+            statusSpan.innerText = '🔴 连接失败';
+            statusSpan.style.backgroundColor = '#e74c3c';
+            if(errorCount > 2) errorDiv.innerText = `无法连接后端服务 (${API_URL})，请检查 Cloudflare Worker 是否正常运行且已设置跨域。`;
+        }
+    }
+
+    async function clearData() {
+        if (!confirm("⚠️ 确定要清空所有小组的提交记录吗？此操作不可撤销！")) return;
+        const clearBtn = document.getElementById('clearDataBtn');
+        clearBtn.disabled = true;
+        clearBtn.innerText = "清空中...";
+        try {
+            const res = await fetch(`${API_URL}/api/clear`, { method: 'POST' });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            if (data.ok) {
+                alert("所有数据已清空");
+                loadStatistics();
+            } else {
+                throw new Error("服务器返回失败");
+            }
+        } catch(e) {
+            console.error("清空失败:", e);
+            alert("清空数据失败，请检查后端服务是否正常。");
+        } finally {
+            clearBtn.disabled = false;
+            clearBtn.innerText = "🗑️ 清空数据";
+        }
+    }
+
+    document.getElementById('manualRefreshBtn').onclick = loadStatistics;
+    document.getElementById('clearDataBtn').onclick = clearData;
+
+    loadStatistics();
+    setInterval(loadStatistics, 3000);
+</script>
+</body>
+</html>

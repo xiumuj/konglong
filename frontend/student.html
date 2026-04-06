@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
+    <title>恐龙化石小侦探 - 学生端</title>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Microsoft YaHei', sans-serif;
+            background: #f9f1e0;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+        .group-select-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(6px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .group-select-card {
+            background: #fff2e0;
+            border-radius: 48px;
+            padding: 30px 40px;
+            text-align: center;
+            width: 90%;
+            max-width: 450px;
+            box-shadow: 0 20px 35px rgba(0,0,0,0.3);
+            border: 4px solid #ffb347;
+        }
+        .group-select-card h2 {
+            color: #b45f2b;
+            font-size: 2rem;
+            margin-top: 0;
+        }
+        .group-select-card input {
+            width: 120px;
+            padding: 12px;
+            font-size: 1.8rem;
+            text-align: center;
+            border-radius: 60px;
+            border: 2px solid #d49c5f;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+        .group-select-card button {
+            background: #f39c12;
+            border: none;
+            padding: 12px 32px;
+            font-size: 1.3rem;
+            border-radius: 40px;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+        }
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            width: 100vw;
+        }
+        .toolbar {
+            background: #5e3a1c;
+            color: #ffefc0;
+            padding: 12px 16px;
+            padding-top: max(12px, env(safe-area-inset-top, 12px));
+            min-height: 70px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            z-index: 20;
+            flex-shrink: 0;
+            font-size: 1rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        .group-info {
+            background: #ffdd99;
+            border-radius: 40px;
+            padding: 8px 16px;
+            color: #4a2a0e;
+            font-weight: bold;
+            font-size: 1rem;
+        }
+        .status-area {
+            background: #2c5a2e;
+            padding: 8px 16px;
+            border-radius: 40px;
+            font-size: 0.9rem;
+            font-weight: bold;
+        }
+        .preload-progress {
+            background: #ffaa33;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            display: none;
+        }
+        .btn {
+            background: #ffaa33;
+            border: none;
+            padding: 8px 18px;
+            border-radius: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: 0.1s;
+        }
+        .btn-primary {
+            background: #d68b2c;
+            color: white;
+        }
+        .btn-reset {
+            background: #4a7a9c;
+            color: white;
+        }
+        .view {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            display: none;
+        }
+        .view.active {
+            display: flex;
+        }
+        .observe-layout {
+            display: flex;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        .bones-list {
+            width: 38%;
+            background: rgba(80, 50, 25, 0.75);
+            padding: 12px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            overflow-y: auto;
+        }
+        .bone-card {
+            background: #fff6e5;
+            border-radius: 20px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            border: 2px solid #ccaa77;
+        }
+        .bone-card.active {
+            background: #ffecb3;
+            border-color: #f3a683;
+            transform: scale(1.02);
+        }
+        .bone-thumb img {
+            width: 80px;
+            height: 80px;
+            object-fit: contain;
+        }
+        .bone-number {
+            font-weight: bold;
+            font-size: 1.2rem;
+            background: #e2a96e;
+            padding: 4px 12px;
+            border-radius: 30px;
+            color: white;
+            margin-top: 8px;
+        }
+        .observe-badge {
+            font-size: 0.8rem;
+            background: #5a9e4e;
+            color: white;
+            border-radius: 50px;
+            padding: 4px 10px;
+            margin-top: 6px;
+        }
+        .model-right-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #ffffff;
+            height: 100%;
+            min-height: 0;
+        }
+        .model-container {
+            flex: 1;
+            background: #ffffff;
+            position: relative;
+            min-height: 200px;
+            touch-action: pan-x pan-y;
+        }
+        #canvas3d {
+            width: 100%;
+            height: 100%;
+            display: block;
+            touch-action: none;
+        }
+        .model-controls {
+            background: #e7dbbc;
+            padding: 12px;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-shrink: 0;
+            flex-wrap: wrap;
+            border-top: 2px solid #b97f44;
+        }
+        .model-controls button {
+            background: #5e3a1c;
+            border: none;
+            color: white;
+            font-size: 1rem;
+            padding: 10px 20px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-weight: bold;
+            min-width: 80px;
+        }
+        .classify-layout {
+            display: flex;
+            flex-direction: row;
+            height: 100%;
+            width: 100%;
+            gap: 12px;
+            padding: 12px;
+            overflow: auto;
+            background: #f7e9d7;
+        }
+        .drag-source-left {
+            flex: 0 0 45%;
+            background: #eeddbb;
+            border-radius: 28px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+        .drag-area-title {
+            background: #b97f44;
+            padding: 10px;
+            border-radius: 24px;
+            color: white;
+            text-align: center;
+            margin-bottom: 16px;
+            font-size: 1.1rem;
+            font-weight: bold;
+        }
+        .drag-items {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 18px;
+            justify-items: center;
+            align-items: center;
+        }
+        .drag-bone-img {
+            width: 100%;
+            text-align: center;
+            cursor: grab;
+        }
+        .drag-bone-img:active {
+            cursor: grabbing;
+        }
+        .drag-bone-img img {
+            width: 130px !important;
+            height: 130px !important;
+            object-fit: contain;
+            background: transparent;
+            display: block;
+            margin: 0 auto;
+        }
+        .drag-bone-img span {
+            font-weight: bold;
+            background: #ffdd99;
+            border-radius: 20px;
+            font-size: 1rem;
+            display: block;
+            margin-top: 8px;
+            padding: 4px 8px;
+        }
+        .categories-right {
+            flex: 1;
+            background: #fef2e0;
+            border-radius: 28px;
+            padding: 16px;
+            overflow-y: auto;
+        }
+        .categories-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+        .category-card {
+            background: #fff6e5;
+            border-radius: 24px;
+            border: 2px solid #dba56d;
+            display: flex;
+            flex-direction: column;
+        }
+        .category-header {
+            padding: 12px;
+            text-align: center;
+            font-weight: bold;
+            background: #b97f44;
+            color: white;
+            border-radius: 20px 20px 0 0;
+            font-size: 1rem;
+        }
+        .category-dropzone {
+            background: #fff2e2;
+            padding: 12px;
+            min-height: 140px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            align-items: center;
+            border-top: 2px dashed #d49c5f;
+        }
+        .category-dropzone .drag-bone-img img {
+            width: 75px !important;
+            height: 75px !important;
+        }
+        .category-dropzone .drag-bone-img span {
+            font-size: 0.8rem;
+        }
+        .submit-area {
+            text-align: center;
+            margin-top: 20px;
+        }
+        #submitBtn {
+            font-size: 1.2rem;
+            padding: 12px 28px;
+            background: #f39c12;
+            border-radius: 50px;
+            min-width: 160px;
+        }
+        .back-btn {
+            background: #7f8c8d;
+            margin-left: 15px;
+            padding: 12px 24px;
+            font-size: 1rem;
+        }
+        .result-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+        }
+        .result-box {
+            background: white;
+            padding: 30px;
+            border-radius: 30px;
+            text-align: center;
+            max-width: 85%;
+        }
+        .result-btn {
+            background: #3498db;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 40px;
+            margin-top: 15px;
+            color: white;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+        @media (max-width: 900px) {
+            .drag-bone-img img {
+                width: 100px !important;
+                height: 100px !important;
+            }
+            .category-dropzone .drag-bone-img img {
+                width: 60px !important;
+                height: 60px !important;
+            }
+            .toolbar {
+                padding: 10px 12px;
+                gap: 8px;
+                font-size: 0.85rem;
+            }
+            .btn {
+                padding: 6px 14px;
+                font-size: 0.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+<div id="groupSelectOverlay" class="group-select-overlay">
+    <div class="group-select-card">
+        <h2>🦖 考古小队</h2>
+        <p>请选择小组编号 (1~23)</p>
+        <input type="number" id="groupSelectInput" min="1" max="23" value="1">
+        <button id="confirmGroupBtn">🔍 进入化石现场</button>
+    </div>
+</div>
+<div class="app-container" id="appContainer" style="display: none;">
+    <div class="toolbar">
+        <div class="group-info" id="groupDisplay">🎯 小组: --</div>
+        <div class="status-area" id="observeStatusMsg">👀 观察进度: 0/11</div>
+        <div class="preload-progress" id="preloadProgress">⏳ 预加载模型: 0/11</div>
+        <button id="resetViewBtn" class="btn btn-reset">🔄 重置</button>
+        <button id="enterClassifyBtn" class="btn btn-primary">🔍 进入分类</button>
+    </div>
+
+    <div id="observeView" class="view active">
+        <div class="observe-layout">
+            <div class="bones-list" id="bonesListContainer"></div>
+            <div class="model-right-panel">
+                <div class="model-container"><canvas id="canvas3d"></canvas></div>
+                <div class="model-controls">
+                    <button id="rotateLeftBtn">↩️ 左旋</button>
+                    <button id="rotateRightBtn">↪️ 右旋</button>
+                    <button id="zoomInBtn">🔍+ 放大</button>
+                    <button id="zoomOutBtn">🔍- 缩小</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="classifyView" class="view">
+        <div class="classify-layout">
+            <div class="drag-source-left">
+                <div class="drag-area-title">🦴 拖动骨骼</div>
+                <div id="dragSourceList" class="drag-items"></div>
+            </div>
+            <div class="categories-right">
+                <div class="drag-area-title">📦 放到正确部位</div>
+                <div id="categoriesGrid" class="categories-grid"></div>
+                <div class="submit-area">
+                    <button id="submitBtn" class="btn" disabled>📌 提交结果</button>
+                    <button id="backToObserveBtn" class="btn back-btn">🔙 返回观察</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="result-modal" id="resultModal">
+    <div class="result-box">
+        <div id="resultTitle"></div>
+        <div id="resultDesc"></div>
+        <button class="result-btn" onclick="closeResult()">确定</button>
+    </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+
+// ---------- 骨骼数据 ----------
+const bonesData = [];
+for(let i=1;i<=11;i++) bonesData.push({
+    id:i, name:`骨骼${i}`,
+    thumbUrl:`./img/bone${i}.png`,
+    modelPath:`./models/bone${i}.glb`,
+    correctPart: getCorrectPart(i)
+});
+function getCorrectPart(id){
+    if([1,6,7].includes(id)) return 'head';
+    if(id===2) return 'neck';
+    if(id===3) return 'tail';
+    if([4,5].includes(id)) return 'body';
+    if([8,9,10,11].includes(id)) return 'limbs';
+    return 'body';
+}
+const partCN = {head:'头部',neck:'颈部',body:'躯干',limbs:'四肢',tail:'尾部'};
+
+// ！！！请修改为您的 Cloudflare Worker 部署后的 URL ！！！
+// 如果您的 Worker 和 Pages 部署在同一个域名下，或者您使用了 Cloudflare 的路由，可以将其设置为 ''
+const API_URL = ''; // 例如 'https://dino-backend.yourname.workers.dev'
+
+let currentGroup = null;
+let scene, camera, renderer, controls, modelGroup;
+let isPreloadComplete = false, preloadedCount = 0;
+const modelCache = {};
+let observeRecords = new Array(11).fill(false);
+const MODEL_SCALE = 1.9;
+
+// 提交结果到后端 (后端只保存第一次)
+async function submitResult(groupId, isCorrect) {
+    try {
+        const response = await fetch(`${API_URL}/api/submit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ groupId, success: isCorrect, timestamp: Date.now() })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            console.warn('后端返回非200:', data);
+            return false;
+        }
+        return data.ok === true;
+    } catch (error) {
+        console.error('提交请求失败:', error);
+        alert(`网络错误，无法连接后端服务 (${API_URL})`);
+        return false;
+    }
+}
+
+// 3D初始化
+function initThree(){
+    const canvas = document.getElementById('canvas3d');
+    const container = document.querySelector('.model-container');
+    canvas.addEventListener('dblclick', (e) => { e.preventDefault(); e.stopPropagation(); });
+    scene = new THREE.Scene();
+    scene.background = null;
+    modelGroup = new THREE.Group();
+    scene.add(modelGroup);
+    camera = new THREE.PerspectiveCamera(38, container.clientWidth/container.clientHeight, 0.1, 1000);
+    camera.position.set(1.5, 1.2, 2.8);
+    renderer = new THREE.WebGLRenderer({ canvas, alpha: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setClearColor(0x000000, 0);
+    controls = new OrbitControls(camera, canvas);
+    controls.enableDamping = false;
+    controls.enablePan = true;
+    controls.enableZoom = true;
+    controls.minDistance = 0.8;
+    controls.maxDistance = 5.5;
+    controls.target.set(0, 0.2, 0);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+    scene.add(ambientLight);
+    const mainLight = new THREE.DirectionalLight(0xfff5e0, 1.2);
+    mainLight.position.set(2, 3, 2);
+    scene.add(mainLight);
+    const fillLight = new THREE.DirectionalLight(0xcceeff, 0.6);
+    fillLight.position.set(-1.5, 1, 2);
+    scene.add(fillLight);
+    window.addEventListener('resize', onResize);
+    animate();
+}
+function animate(){ requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+function onResize(){
+    const container = document.querySelector('.model-container');
+    const w = container.clientWidth, h = container.clientHeight;
+    renderer.setSize(w, h);
+    camera.aspect = w/h;
+    camera.updateProjectionMatrix();
+}
+const draco = new DRACOLoader();
+draco.setDecoderPath('./draco/');
+draco.preload();
+const loader = new GLTFLoader();
+loader.setDRACOLoader(draco);
+function preloadAllModels(){
+    const bar = document.getElementById('preloadProgress');
+    bar.style.display = 'block';
+    bonesData.forEach(b=>{
+        loader.load(b.modelPath, gltf=>{
+            let model = gltf.scene;
+            if(b.id === 6){ model.rotateY(Math.PI / 2); model.rotateY(Math.PI); }
+            const box = new THREE.Box3().setFromObject(model);
+            const center = box.getCenter(new THREE.Vector3());
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const finalScale = (1.0 / maxDim) * MODEL_SCALE;
+            model.scale.setScalar(finalScale);
+            model.position.sub(center.multiplyScalar(finalScale));
+            model.position.y += 0.2;
+            modelCache[b.id] = model;
+            preloadedCount++;
+            bar.innerText = `⏳ 预加载模型: ${preloadedCount}/11`;
+            if(preloadedCount === 11){
+                isPreloadComplete = true;
+                bar.style.display = 'none';
+                switchModel(1);
+                renderList();
+            }
+        }, undefined, err=>console.warn(`模型${b.id}加载失败`, err));
+    });
+}
+function switchModel(id){ if(!isPreloadComplete) return; while(modelGroup.children.length) modelGroup.remove(modelGroup.children[0]); modelGroup.add(modelCache[id].clone()); }
+function renderList(){
+    const container = document.getElementById('bonesListContainer');
+    container.innerHTML = '';
+    bonesData.forEach(b=>{
+        const card = document.createElement('div');
+        card.className = 'bone-card';
+        const ok = observeRecords[b.id-1];
+        card.innerHTML = `<div class="bone-thumb"><img src="${b.thumbUrl}"></div><div class="bone-number">${b.id}</div><div class="observe-badge">${ok?'✅已观察':'👀未观察'}</div>`;
+        card.onclick = ()=>{ observeRecords[b.id-1]=true; renderList(); updateProgress(); if(isPreloadComplete) switchModel(b.id); document.querySelectorAll('.bone-card').forEach(x=>x.classList.remove('active')); card.classList.add('active'); };
+        container.appendChild(card);
+    });
+}
+function updateProgress(){ const cnt = observeRecords.filter(Boolean).length; document.getElementById('observeStatusMsg').innerText = `👀 观察进度: ${cnt}/11`; }
+
+// 重置分类：将所有骨骼移回左侧列表
+function resetClassification() {
+    const leftContainer = document.getElementById('dragSourceList');
+    const allBonesInDropZones = document.querySelectorAll('.category-dropzone .drag-bone-img');
+    allBonesInDropZones.forEach(bone => {
+        leftContainer.appendChild(bone);
+    });
+    // 更新提交按钮状态（如果有骨骼在左侧，按钮禁用）
+    const submitBtn = document.getElementById('submitBtn');
+    if (submitBtn) submitBtn.disabled = leftContainer.children.length > 0;
+}
+
+function buildClassify(){
+    const drag = document.getElementById('dragSourceList');
+    drag.innerHTML = '';
+    bonesData.forEach(b=>{
+        const d = document.createElement('div');
+        d.className = 'drag-bone-img';
+        d.dataset.boneId = b.id;
+        d.innerHTML = `<img src="${b.thumbUrl}"><span>#${b.id}</span>`;
+        drag.appendChild(d);
+    });
+    const cats = ['head','neck','body','limbs','tail'];
+    const grid = document.getElementById('categoriesGrid');
+    grid.innerHTML = '';
+    cats.forEach(cat=>{
+        const div = document.createElement('div');
+        div.className = 'category-card';
+        div.innerHTML = `<div class="category-header">${partCN[cat]}</div><div class="category-dropzone" id="dz-${cat}"></div>`;
+        grid.appendChild(div);
+    });
+    new Sortable(drag, { group: 'bone', animation: 150 });
+    cats.forEach(c=>new Sortable(document.getElementById(`dz-${c}`), { group: 'bone', animation: 150 }));
+    const observer = new MutationObserver(()=>{ const submitBtn = document.getElementById('submitBtn'); if(submitBtn) submitBtn.disabled = drag.children.length > 0; });
+    observer.observe(drag, { childList: true, subtree: false });
+}
+
+function checkAnswer(){
+    const cats = ['head','neck','body','limbs','tail'];
+    for(const cat of cats){
+        const items = document.querySelectorAll(`#dz-${cat} .drag-bone-img`);
+        for(const it of items){
+            const id = parseInt(it.dataset.boneId);
+            if(getCorrectPart(id) !== cat) return false;
+        }
+    }
+    return true;
+}
+
+async function submit(){
+    if(!currentGroup) { alert("小组信息丢失，请刷新页面重新选择"); return; }
+    const submitBtn = document.getElementById('submitBtn');
+    if(submitBtn.disabled) { alert("请先将所有骨骼拖拽到右侧分类区域！"); return; }
+    
+    const isCorrect = checkAnswer();
+    await submitResult(currentGroup, isCorrect);
+    
+    const modal = document.getElementById('resultModal');
+    const titleDiv = document.getElementById('resultTitle');
+    const descDiv = document.getElementById('resultDesc');
+    if(isCorrect){
+        titleDiv.innerHTML = '<span style="color:#27ae60">🎉 恭喜，分类正确！</span>';
+        descDiv.innerText = `第${currentGroup}组 本次分类正确。`;
+    } else {
+        titleDiv.innerHTML = '<span style="color:#e74c3c">⚠️ 分类有错误噢！</span>';
+        descDiv.innerText = `第${currentGroup}组 部分骨骼位置错误，请重新调整后再提交。`;
+    }
+    modal.style.display = 'flex';
+}
+window.closeResult = function(){ document.getElementById('resultModal').style.display = 'none'; };
+
+function setupModelControls(){
+    document.getElementById('rotateLeftBtn').onclick = ()=>{ if(modelGroup) modelGroup.rotation.y += 0.2; };
+    document.getElementById('rotateRightBtn').onclick = ()=>{ if(modelGroup) modelGroup.rotation.y -= 0.2; };
+    document.getElementById('zoomInBtn').onclick = ()=>{ const dir = new THREE.Vector3().subVectors(camera.position, controls.target).normalize(); let newPos = camera.position.clone().sub(dir.multiplyScalar(0.25)); if(newPos.length() > 0.6) camera.position.copy(newPos); controls.update(); };
+    document.getElementById('zoomOutBtn').onclick = ()=>{ const dir = new THREE.Vector3().subVectors(camera.position, controls.target).normalize(); let newPos = camera.position.clone().add(dir.multiplyScalar(0.25)); if(newPos.length() < 5.0) camera.position.copy(newPos); controls.update(); };
+    document.getElementById('resetViewBtn').onclick = ()=>{
+        // 重置3D视角
+        camera.position.set(1.5, 1.2, 2.8);
+        controls.target.set(0, 0.2, 0);
+        if(modelGroup) modelGroup.rotation.set(0,0,0);
+        controls.update();
+        // 如果当前处于分类视图，额外重置分类拖拽状态
+        if (document.getElementById('classifyView').classList.contains('active')) {
+            resetClassification();
+        }
+    };
+}
+
+function initGroupSelection(){
+    const overlay = document.getElementById('groupSelectOverlay');
+    document.getElementById('confirmGroupBtn').onclick = ()=>{
+        let val = parseInt(document.getElementById('groupSelectInput').value);
+        if(isNaN(val)) val = 1;
+        if(val<1) val=1;
+        if(val>23) val=23;
+        currentGroup = val;
+        document.getElementById('groupDisplay').innerText = `🎯 小组: ${currentGroup}`;
+        overlay.style.display = 'none';
+        document.getElementById('appContainer').style.display = 'flex';
+        initThree();
+        setupModelControls();
+        renderList();
+        updateProgress();
+        preloadAllModels();
+    };
+}
+
+document.getElementById('enterClassifyBtn').onclick = ()=>{
+    if(observeRecords.filter(Boolean).length < 11 && !confirm("还没观察完所有模型，确定进入分类？")) return;
+    document.getElementById('observeView').classList.remove('active');
+    document.getElementById('classifyView').classList.add('active');
+    buildClassify();
+};
+document.getElementById('backToObserveBtn').onclick = ()=>{
+    document.getElementById('classifyView').classList.remove('active');
+    document.getElementById('observeView').classList.add('active');
+};
+document.getElementById('submitBtn').onclick = submit;
+
+initGroupSelection();
+</script>
+</body>
+</html>
