@@ -394,6 +394,83 @@
             cursor: pointer;
             font-size: 1rem;
         }
+
+        /* 查看完整模型按钮：悬浮在右下角 */
+        .full-model-entry-btn {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            z-index: 100;
+            background: #e67e22;
+            color: white;
+            border: none;
+            padding: 15px 25px;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            cursor: pointer;
+            display: none; /* 初始隐藏 */
+            animation: bounceIn 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+        @keyframes bounceIn {
+            0% { transform: scale(0); opacity: 0; }
+            60% { transform: scale(1.1); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* 完整模型视图布局 */
+        .full-model-layout {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+            background: #f9f1e0;
+        }
+        .full-model-canvas-container {
+            flex: 1;
+            position: relative;
+            background: #ffffff;
+            min-height: 0;
+        }
+        #fullModelCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        .full-model-controls {
+            background: #e7dbbc;
+            padding: 12px 0;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-shrink: 0;
+            border-top: 2px solid #b97f44;
+        }
+        .full-model-controls button {
+            background: #5e3a1c;
+            border: none;
+            color: white;
+            font-size: 1rem;
+            padding: 10px 20px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-weight: bold;
+            min-width: 80px;
+        }
+        .full-model-back-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 110;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 30px;
+            cursor: pointer;
+        }
+
         @media (max-width: 900px) {
             .drag-bone-img img {
                 width: 90px !important;
@@ -524,7 +601,26 @@
             </div>
         </div>
     </div>
+
+    <!-- 完整模型视图：集成 index1.html 功能 -->
+    <div id="fullModelView" class="view">
+        <div class="full-model-layout">
+            <button class="full-model-back-btn" id="fullModelBackBtn">🔙 返回分类</button>
+            <div class="full-model-canvas-container">
+                <canvas id="fullModelCanvas"></canvas>
+            </div>
+            <div class="full-model-controls">
+                <button id="fullRotateLeftBtn">↩️ 左旋</button>
+                <button id="fullRotateRightBtn">↪️ 右旋</button>
+                <button id="fullZoomInBtn">🔍+ 放大</button>
+                <button id="fullZoomOutBtn">🔍- 缩小</button>
+            </div>
+        </div>
+    </div>
 </div>
+
+<button id="viewFullModelBtn" class="full-model-entry-btn">🦕 查看完整恐龙模型</button>
+
 <div class="result-modal" id="resultModal">
     <div class="result-box">
         <div id="resultTitle"></div>
@@ -569,6 +665,12 @@ const modelCache = {};
 let observeRecords = new Array(11).fill(false);
 const MODEL_SCALE = 1.9;
 
+// --- 完整模型变量 (集成 index1.html) ---
+let fullScene, fullCamera, fullRenderer, fullControls, fullModelGroup;
+const FULL_MODEL_PATH = 'https://pic.tangsong.qzz.io/PicGo/full_body.glb';
+const FULL_MODEL_SCALE = 1.9;
+const AUTO_ROTATE_SPEED = 0.005;
+
 // 提交结果到后端 (后端只保存第一次)
 async function submitResult(groupId, isCorrect) {
     try {
@@ -611,24 +713,113 @@ function initThree(){
     controls.minDistance = 0.8;
     controls.maxDistance = 5.5;
     controls.target.set(0, 0.2, 0);
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
     scene.add(ambientLight);
-    const mainLight = new THREE.DirectionalLight(0xfff5e0, 1.2);
+    const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
     mainLight.position.set(2, 3, 2);
     scene.add(mainLight);
-    const fillLight = new THREE.DirectionalLight(0xcceeff, 0.6);
-    fillLight.position.set(-1.5, 1, 2);
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    fillLight.position.set(-2, 1, 2);
     scene.add(fillLight);
+    const backLight = new THREE.DirectionalLight(0xffffff, 0.7);
+    backLight.position.set(0, 2, -4);
+    scene.add(backLight);
     window.addEventListener('resize', onResize);
     animate();
 }
-function animate(){ requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+function animate(){ requestAnimationFrame(animate); if(controls) controls.update(); if(renderer) renderer.render(scene, camera); }
 function onResize(){
+    // 观察模式的画布自适应
     const container = document.querySelector('.model-container');
-    const w = container.clientWidth, h = container.clientHeight;
-    renderer.setSize(w, h);
-    camera.aspect = w/h;
-    camera.updateProjectionMatrix();
+    if(container && renderer && camera){
+        const w = container.clientWidth, h = container.clientHeight;
+        renderer.setSize(w, h);
+        camera.aspect = w/h;
+        camera.updateProjectionMatrix();
+    }
+    // 完整模型模式的画布自适应
+    const fullContainer = document.querySelector('.full-model-canvas-container');
+    if(fullContainer && fullRenderer && fullCamera){
+        const fw = fullContainer.clientWidth, fh = fullContainer.clientHeight;
+        fullRenderer.setSize(fw, fh);
+        fullCamera.aspect = fw/fh;
+        fullCamera.updateProjectionMatrix();
+    }
+}
+
+// ---------- 完整模型逻辑集成 (from index1.html) ----------
+function initFullModel(){
+    const canvas = document.getElementById('fullModelCanvas');
+    const container = document.querySelector('.full-model-canvas-container');
+    
+    fullScene = new THREE.Scene();
+    fullScene.background = null;
+    
+    fullModelGroup = new THREE.Group();
+    fullScene.add(fullModelGroup);
+
+    fullCamera = new THREE.PerspectiveCamera(38, container.clientWidth / container.clientHeight, 0.1, 1000);
+    fullCamera.position.set(1.5, 1.2, 2.8);
+
+    fullRenderer = new THREE.WebGLRenderer({ canvas, alpha: true });
+    fullRenderer.setSize(container.clientWidth, container.clientHeight);
+    fullRenderer.setClearColor(0x000000, 0);
+
+    fullControls = new OrbitControls(fullCamera, canvas);
+    fullControls.enableDamping = false;
+    fullControls.enablePan = true;
+    fullControls.enableZoom = true;
+    fullControls.minDistance = 0.8;
+    fullControls.maxDistance = 5.5;
+    fullControls.target.set(0, 0.2, 0);
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+    fullScene.add(ambientLight);
+    const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    mainLight.position.set(2, 3, 2);
+    fullScene.add(mainLight);
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    fillLight.position.set(-2, 1, 2);
+    fullScene.add(fillLight);
+    const backLight = new THREE.DirectionalLight(0xffffff, 0.7);
+    backLight.position.set(0, 2, -4);
+    fullScene.add(backLight);
+
+    animateFullModel();
+    loadFullModel();
+}
+
+function animateFullModel(){
+    requestAnimationFrame(animateFullModel);
+    // 自动慢速旋转
+    if (fullModelGroup) fullModelGroup.rotation.y += AUTO_ROTATE_SPEED;
+    if (fullControls) fullControls.update();
+    if (fullRenderer) fullRenderer.render(fullScene, fullCamera);
+}
+
+function loadFullModel(){
+    if (fullModelGroup.children.length > 0) return; // 已加载则跳过
+    
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath('./draco/');
+    const gltfLoader = new GLTFLoader();
+    gltfLoader.setDRACOLoader(dracoLoader);
+
+    gltfLoader.load(FULL_MODEL_PATH, (gltf) => {
+        const model = gltf.scene;
+        const box = new THREE.Box3().setFromObject(model);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const finalScale = (1.0 / maxDim) * FULL_MODEL_SCALE;
+        
+        model.scale.setScalar(finalScale);
+        model.position.sub(center.multiplyScalar(finalScale));
+        model.position.y += 0.2;
+        fullModelGroup.add(model);
+    }, undefined, (err) => {
+        console.error('完整模型加载失败：', err);
+    });
 }
 const draco = new DRACOLoader();
 draco.setDecoderPath('./draco/');
@@ -744,6 +935,8 @@ async function submit(){
         titleDiv.innerHTML = '<span style="color:#e74c3c">⚠️ 分类有错误噢！</span>';
         descDiv.innerText = `第${currentGroup}组 部分骨骼位置错误，请重新调整后再提交。`;
     }
+    // 提交后（不论对错），在右下角显示“查看完整模型”按钮
+    document.getElementById('viewFullModelBtn').style.display = 'block';
     modal.style.display = 'flex';
 }
 window.closeResult = function(){ document.getElementById('resultModal').style.display = 'none'; };
@@ -766,6 +959,49 @@ function setupModelControls(){
     };
 }
 
+function setupFullModelControls(){
+    // 完整模型的手动控制按钮逻辑
+    document.getElementById('fullRotateLeftBtn').onclick = ()=>{ if(fullModelGroup) fullModelGroup.rotation.y += 0.2; };
+    document.getElementById('fullRotateRightBtn').onclick = ()=>{ if(fullModelGroup) fullModelGroup.rotation.y -= 0.2; };
+    document.getElementById('fullZoomInBtn').onclick = ()=>{ 
+        const dir = new THREE.Vector3().subVectors(fullCamera.position, fullControls.target).normalize(); 
+        let newPos = fullCamera.position.clone().sub(dir.multiplyScalar(0.25)); 
+        if(newPos.length() > 0.6) fullCamera.position.copy(newPos); 
+        fullControls.update(); 
+    };
+    document.getElementById('fullZoomOutBtn').onclick = ()=>{ 
+        const dir = new THREE.Vector3().subVectors(fullCamera.position, fullControls.target).normalize(); 
+        let newPos = fullCamera.position.clone().add(dir.multiplyScalar(0.25)); 
+        if(newPos.length() < 5.0) fullCamera.position.copy(newPos); 
+        fullControls.update(); 
+    };
+
+    // 切换到完整模型视图的逻辑
+    document.getElementById('viewFullModelBtn').onclick = ()=>{
+        // 隐藏当前所有视图，显示完整模型视图
+        document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+        document.getElementById('fullModelView').classList.add('active');
+        
+        // 隐藏右下角的入口按钮，防止遮挡
+        document.getElementById('viewFullModelBtn').style.display = 'none';
+        
+        // 初始化完整模型场景（仅首次点击初始化）
+        if(!fullScene) initFullModel();
+        
+        // 强制触发一次重绘自适应
+        setTimeout(onResize, 50);
+    };
+
+    // 从完整模型视图返回分类视图
+    document.getElementById('fullModelBackBtn').onclick = ()=>{
+        document.getElementById('fullModelView').classList.remove('active');
+        document.getElementById('classifyView').classList.add('active');
+        
+        // 重新显示右下角的入口按钮
+        document.getElementById('viewFullModelBtn').style.display = 'block';
+    };
+}
+
 function initGroupSelection(){
     const overlay = document.getElementById('groupSelectOverlay');
     document.getElementById('confirmGroupBtn').onclick = ()=>{
@@ -779,6 +1015,7 @@ function initGroupSelection(){
         document.getElementById('appContainer').style.display = 'flex';
         initThree();
         setupModelControls();
+        setupFullModelControls(); // 初始化完整模型相关的控制逻辑
         renderList();
         updateProgress();
         preloadAllModels();

@@ -12,11 +12,9 @@ export async function onRequestPost(context) {
     const success = !!data.success;
     const timestamp = data.timestamp || Date.now();
 
-    const existing = await env.RESULTS_KV.get(groupId);
-    if (!existing) {
-      const result = { success, timestamp };
-      await env.RESULTS_KV.put(groupId, JSON.stringify(result));
-    }
+    // 更新 KV：如果已存在，则更新为最新状态；如果不存在，则创建。
+    const result = { success, timestamp };
+    await env.RESULTS_KV.put(groupId, JSON.stringify(result));
 
     return new Response(JSON.stringify({ ok: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
