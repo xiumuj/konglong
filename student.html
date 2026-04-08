@@ -75,6 +75,19 @@
             font-weight: bold;
             color: white;
             cursor: pointer;
+            transition: all 0.3s ease;
+            display: block;
+            width: 100%;
+            margin-top: 10px;
+        }
+        .group-select-card button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .home-full-model-btn {
+            background: #e67e22 !important;
+            margin-top: 15px !important;
+            font-size: 1.1rem !important;
         }
         .app-container {
             display: flex;
@@ -243,7 +256,7 @@
         }
         .classify-layout {
             display: flex;
-            flex-direction: row;
+            flex-direction: column; /* 改为上下布局 */
             height: 100%;
             width: 100%;
             gap: 12px;
@@ -252,13 +265,13 @@
             background: #f7e9d7;
         }
         .drag-source-left {
-            flex: 0 0 45%;
+            flex: 0 0 auto; /* 不再固定宽度，高度自动 */
             background: #eeddbb;
             border-radius: 28px;
             padding: 16px;
             display: flex;
             flex-direction: column;
-            overflow-y: auto;
+            overflow-y: visible; /* 容器内部不滚动，由父级控制 */
         }
         .drag-area-title {
             background: #b97f44;
@@ -272,13 +285,13 @@
         }
         .drag-items {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); /* 自动填充 */
             gap: 18px;
             justify-items: center;
             align-items: center;
         }
         .drag-bone-img {
-            width: 100%;
+            width: 100px; /* 固定宽度 */
             text-align: center;
             cursor: grab;
         }
@@ -286,8 +299,8 @@
             cursor: grabbing;
         }
         .drag-bone-img img {
-            width: 130px !important;
-            height: 130px !important;
+            width: 80px !important;
+            height: 80px !important;
             object-fit: contain;
             background: transparent;
             display: block;
@@ -297,21 +310,21 @@
             font-weight: bold;
             background: #ffdd99;
             border-radius: 20px;
-            font-size: 1rem;
+            font-size: 0.9rem;
             display: block;
-            margin-top: 8px;
-            padding: 4px 8px;
+            margin-top: 4px;
+            padding: 2px 8px;
         }
         .categories-right {
             flex: 1;
             background: #fef2e0;
             border-radius: 28px;
             padding: 16px;
-            overflow-y: auto;
+            /* 移除 overflow-y: auto; 让父级控制滚动 */
         }
         .categories-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); /* 自动适应 */
             gap: 16px;
         }
         .category-card {
@@ -358,6 +371,13 @@
             background: #f39c12;
             border-radius: 50px;
             min-width: 160px;
+        }
+        #classifyResetBtn {
+            background: #4a7a9c;
+            color: white;
+            padding: 12px 24px;
+            font-size: 1rem;
+            margin-right: 15px;
         }
         .back-btn {
             background: #7f8c8d;
@@ -514,31 +534,37 @@
             }
             .classify-layout {
                 flex-direction: column;
+                overflow-y: auto;
             }
             .drag-source-left {
-                flex: 0 0 40%;
+                flex: 0 0 auto;
                 width: 100%;
+                padding: 10px;
             }
             .categories-right {
                 width: 100%;
+                padding: 10px;
             }
             .drag-items {
-                grid-template-columns: repeat(4, 1fr);
-                gap: 10px;
+                grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+                gap: 8px;
+            }
+            .drag-bone-img {
+                width: 70px;
             }
             .drag-bone-img img {
-                width: 65px !important;
-                height: 65px !important;
+                width: 50px !important;
+                height: 50px !important;
             }
             .drag-bone-img span {
-                font-size: 0.75rem;
-                padding: 2px 6px;
+                font-size: 0.7rem;
+                padding: 1px 4px;
             }
             .categories-grid {
                 grid-template-columns: 1fr;
             }
             .category-dropzone {
-                min-height: 100px;
+                min-height: 80px;
             }
             .model-controls {
                 gap: 10px;
@@ -559,6 +585,8 @@
         <p>请选择小组编号 (1~23)</p>
         <input type="number" id="groupSelectInput" min="1" max="23" value="1">
         <button id="confirmGroupBtn">🔍 进入化石现场</button>
+        <div style="margin: 20px 0; border-top: 1px dashed #d49c5f;"></div>
+        <button id="homeViewFullModelBtn" class="home-full-model-btn">🦕 查看完整恐龙模型</button>
     </div>
 </div>
 <div class="app-container" id="appContainer" style="display: none;">
@@ -592,9 +620,9 @@
                 <div id="dragSourceList" class="drag-items"></div>
             </div>
             <div class="categories-right">
-                <div class="drag-area-title">📦 放到正确部位</div>
                 <div id="categoriesGrid" class="categories-grid"></div>
                 <div class="submit-area">
+                    <button id="classifyResetBtn" class="btn btn-reset">🔄 重置</button>
                     <button id="submitBtn" class="btn" disabled>📌 提交结果</button>
                     <button id="backToObserveBtn" class="btn back-btn">🔙 返回观察</button>
                 </div>
@@ -667,7 +695,8 @@ const MODEL_SCALE = 1.9;
 
 // --- 完整模型变量 (集成 index1.html) ---
 let fullScene, fullCamera, fullRenderer, fullControls, fullModelGroup;
-const FULL_MODEL_PATH = 'https://pic.tangsong.qzz.io/PicGo/full_body.glb';
+let lastViewBeforeFullModel = 'classifyView'; // 记录进入完整模型前的视图
+const FULL_MODEL_PATH = './models/full.glb';
 const FULL_MODEL_SCALE = 1.9;
 const AUTO_ROTATE_SPEED = 0.005;
 
@@ -957,6 +986,13 @@ function setupModelControls(){
             resetClassification();
         }
     };
+    // 分类页面的专用重置按钮
+    const classifyResetBtn = document.getElementById('classifyResetBtn');
+    if(classifyResetBtn) {
+        classifyResetBtn.onclick = () => {
+            resetClassification();
+        };
+    }
 }
 
 function setupFullModelControls(){
@@ -976,29 +1012,58 @@ function setupFullModelControls(){
         fullControls.update(); 
     };
 
-    // 切换到完整模型视图的逻辑
-    document.getElementById('viewFullModelBtn').onclick = ()=>{
-        // 隐藏当前所有视图，显示完整模型视图
+    // 公用的进入完整模型函数
+    const enterFullModel = (from) => {
+        lastViewBeforeFullModel = from;
+        const backBtn = document.getElementById('fullModelBackBtn');
+        const toolbar = document.querySelector('.toolbar');
+        if (from === 'home') {
+            backBtn.innerText = '🔙 返回首页';
+        } else {
+            backBtn.innerText = '🔙 返回分类';
+        }
+        // 进入全屏模型视图时隐藏顶栏
+        if(toolbar) toolbar.style.display = 'none';
+
+        // 隐藏所有视图
         document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+        document.getElementById('appContainer').style.display = 'flex';
         document.getElementById('fullModelView').classList.add('active');
         
-        // 隐藏右下角的入口按钮，防止遮挡
+        // 隐藏可能显示的浮动按钮
         document.getElementById('viewFullModelBtn').style.display = 'none';
         
-        // 初始化完整模型场景（仅首次点击初始化）
+        // 初始化
         if(!fullScene) initFullModel();
-        
-        // 强制触发一次重绘自适应
         setTimeout(onResize, 50);
     };
 
-    // 从完整模型视图返回分类视图
+    // 首页按钮进入
+    document.getElementById('homeViewFullModelBtn').onclick = ()=>{
+        document.getElementById('groupSelectOverlay').style.display = 'none';
+        enterFullModel('home');
+    };
+
+    // 提交后的浮动按钮进入
+    document.getElementById('viewFullModelBtn').onclick = ()=>{
+        enterFullModel('classifyView');
+    };
+
+    // 从完整模型视图返回
     document.getElementById('fullModelBackBtn').onclick = ()=>{
         document.getElementById('fullModelView').classList.remove('active');
-        document.getElementById('classifyView').classList.add('active');
         
-        // 重新显示右下角的入口按钮
-        document.getElementById('viewFullModelBtn').style.display = 'block';
+        const toolbar = document.querySelector('.toolbar');
+        if (lastViewBeforeFullModel === 'home') {
+            document.getElementById('appContainer').style.display = 'none';
+            document.getElementById('groupSelectOverlay').style.display = 'flex';
+            if(toolbar) toolbar.style.display = 'none';
+        } else {
+            document.getElementById('classifyView').classList.add('active');
+            document.getElementById('viewFullModelBtn').style.display = 'block';
+            // 返回分类页面时保持顶栏隐藏
+            if(toolbar) toolbar.style.display = 'none';
+        }
     };
 }
 
@@ -1013,24 +1078,32 @@ function initGroupSelection(){
         document.getElementById('groupDisplay').innerText = `🎯 小组: ${currentGroup}`;
         overlay.style.display = 'none';
         document.getElementById('appContainer').style.display = 'flex';
+        const toolbar = document.querySelector('.toolbar');
+        if(toolbar) toolbar.style.display = 'flex';
         initThree();
         setupModelControls();
-        setupFullModelControls(); // 初始化完整模型相关的控制逻辑
         renderList();
         updateProgress();
         preloadAllModels();
     };
+    setupFullModelControls(); // 提前初始化完整模型相关的控制逻辑，支持首页按钮
 }
 
 document.getElementById('enterClassifyBtn').onclick = ()=>{
     if(observeRecords.filter(Boolean).length < 11 && !confirm("还没观察完所有模型，确定进入分类？")) return;
     document.getElementById('observeView').classList.remove('active');
     document.getElementById('classifyView').classList.add('active');
+    // 进入分类时隐藏顶栏
+    const toolbar = document.querySelector('.toolbar');
+    if(toolbar) toolbar.style.display = 'none';
     buildClassify();
 };
 document.getElementById('backToObserveBtn').onclick = ()=>{
     document.getElementById('classifyView').classList.remove('active');
     document.getElementById('observeView').classList.add('active');
+    // 返回观察时恢复顶栏
+    const toolbar = document.querySelector('.toolbar');
+    if(toolbar) toolbar.style.display = 'flex';
 };
 document.getElementById('submitBtn').onclick = submit;
 
