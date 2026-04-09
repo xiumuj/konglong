@@ -126,13 +126,7 @@
             font-size: 0.9rem;
             font-weight: bold;
         }
-        .preload-progress {
-            background: #ffaa33;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            display: none;
-        }
+
         .btn {
             background: #ffaa33;
             border: none;
@@ -593,7 +587,6 @@
     <div class="toolbar">
         <div class="group-info" id="groupDisplay">🎯 小组: --</div>
         <div class="status-area" id="observeStatusMsg">👀 观察进度: 0/11</div>
-        <div class="preload-progress" id="preloadProgress">⏳ 预加载模型: 0/12</div>
         <button id="resetViewBtn" class="btn btn-reset">🔄 重置</button>
         <button id="enterClassifyBtn" class="btn btn-primary">🔍 进入分类</button>
     </div>
@@ -635,6 +628,7 @@
         <div class="full-model-layout">
             <button class="full-model-back-btn" id="fullModelBackBtn">🔙 返回分类</button>
             <div class="full-model-canvas-container">
+                <div id="fullModelLoadingStatus" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.6); color: white; padding: 12px 24px; border-radius: 30px; z-index: 10; display: none;">⏳ 正在加载完整模型...</div>
                 <canvas id="fullModelCanvas"></canvas>
             </div>
             <div class="full-model-controls">
@@ -688,7 +682,6 @@ const API_URL = window.location.protocol === 'file:'
 
 let currentGroup = null;
 let scene, camera, renderer, controls, modelGroup;
-let isPreloadComplete = false, preloadedCount = 0;
 const modelCache = {};
 let observeRecords = new Array(11).fill(false);
 const MODEL_SCALE = 1.9;
@@ -696,7 +689,7 @@ const MODEL_SCALE = 1.9;
 // --- 完整模型变量 (集成 index1.html) ---
 let fullScene, fullCamera, fullRenderer, fullControls, fullModelGroup;
 let lastViewBeforeFullModel = 'classifyView'; // 记录进入完整模型前的视图
-const FULL_MODEL_PATH = './models/full.glb';
+const FULL_MODEL_PATH = 'https://test.fukit.cn/autoupload/f/1mNAyVlguK3k6jfj2DuTvbKXl_QqVl-bpSwqP4fJO68/20260409/fBOO/full.glb';
 const FULL_MODEL_SCALE = 1.9;
 const AUTO_ROTATE_SPEED = 0.005;
 let fullModelCache = null; // 缓存完整模型
@@ -830,64 +823,15 @@ function animateFullModel(){
 function loadFullModel(){
     if (fullModelGroup.children.length > 0) return; // 已加载则跳过
     
-    // 如果已有预加载好的缓存模型，直接克隆并添加到场景中
+    // 如果已有缓存模型，直接克隆并添加到场景中
     if (fullModelCache) {
         fullModelGroup.add(fullModelCache.clone());
         return;
     }
 
-    const dracoLoader = new DRACOLoader();
-    dracoLoader.setDecoderPath('./draco/');
-    const gltfLoader = new GLTFLoader();
-    gltfLoader.setDRACOLoader(dracoLoader);
+    const fullLoading = document.getElementById('fullModelLoadingStatus');
+    if(fullLoading) fullLoading.style.display = 'block';
 
-    gltfLoader.load(FULL_MODEL_PATH, (gltf) => {
-        const model = gltf.scene;
-        const box = new THREE.Box3().setFromObject(model);
-        const center = box.getCenter(new THREE.Vector3());
-        const size = box.getSize(new THREE.Vector3());
-        const maxDim = Math.max(size.x, size.y, size.z);
-        const finalScale = (1.0 / maxDim) * FULL_MODEL_SCALE;
-        
-        model.scale.setScalar(finalScale);
-        model.position.sub(center.multiplyScalar(finalScale));
-        model.position.y += 0.2;
-        fullModelGroup.add(model);
-    }, undefined, (err) => {
-        console.error('完整模型加载失败：', err);
-    });
-}
-const draco = new DRACOLoader();
-draco.setDecoderPath('./draco/');
-draco.preload();
-const loader = new GLTFLoader();
-loader.setDRACOLoader(draco);
-function preloadAllModels(){
-    const bar = document.getElementById('preloadProgress');
-    bar.style.display = 'block';
-    const TOTAL_MODELS = bonesData.length + 1; // 11个骨骼 + 1个完整模型
-
-    // 1. 预加载所有骨骼模型
-    bonesData.forEach(b=>{
-        loader.load(b.modelPath, gltf=>{
-            let model = gltf.scene;
-            if(b.id === 6){ model.rotateY(Math.PI / 2); model.rotateY(Math.PI); }
-            const box = new THREE.Box3().setFromObject(model);
-            const center = box.getCenter(new THREE.Vector3());
-            const size = box.getSize(new THREE.Vector3());
-            const maxDim = Math.max(size.x, size.y, size.z);
-            const finalScale = (1.0 / maxDim) * MODEL_SCALE;
-            model.scale.setScalar(finalScale);
-            model.position.sub(center.multiplyScalar(finalScale));
-            model.position.y += 0.2;
-            modelCache[b.id] = model;
-            preloadedCount++;
-            bar.innerText = `⏳ 预加载模型: ${preloadedCount}/${TOTAL_MODELS}`;
-            checkPreloadComplete();
-        }, undefined, err=>console.warn(`模型${b.id}加载失败`, err));
-    });
-
-    // 2. 预加载完整恐龙模型
     loader.load(FULL_MODEL_PATH, (gltf) => {
         const model = gltf.scene;
         const box = new THREE.Box3().setFromObject(model);
@@ -899,37 +843,91 @@ function preloadAllModels(){
         model.scale.setScalar(finalScale);
         model.position.sub(center.multiplyScalar(finalScale));
         model.position.y += 0.2;
-        fullModelCache = model; // 存入缓存
-        
-        preloadedCount++;
-        bar.innerText = `⏳ 预加载模型: ${preloadedCount}/${TOTAL_MODELS}`;
-        checkPreloadComplete();
+        fullModelGroup.add(model);
+        fullModelCache = model; // 同时存入缓存
+        if(fullLoading) fullLoading.style.display = 'none';
     }, undefined, (err) => {
-        console.error('完整模型预加载失败：', err);
-    });
-
-    function checkPreloadComplete() {
-        if(preloadedCount === TOTAL_MODELS){
-            isPreloadComplete = true;
-            bar.style.display = 'none';
-            switchModel(1);
-            renderList();
+        console.error('完整模型加载失败：', err);
+        if(fullLoading) {
+            fullLoading.innerText = '❌ 加载失败，请重试';
+            fullLoading.style.color = '#ff6b6b';
         }
-    }
-}
-function switchModel(id){ if(!isPreloadComplete) return; while(modelGroup.children.length) modelGroup.remove(modelGroup.children[0]); modelGroup.add(modelCache[id].clone()); }
-function renderList(){
-    const container = document.getElementById('bonesListContainer');
-    container.innerHTML = '';
-    bonesData.forEach(b=>{
-        const card = document.createElement('div');
-        card.className = 'bone-card';
-        const ok = observeRecords[b.id-1];
-        card.innerHTML = `<div class="bone-thumb"><img src="${b.thumbUrl}"></div><div class="bone-number">${b.id}</div><div class="observe-badge">${ok?'✅已观察':'👀未观察'}</div>`;
-        card.onclick = ()=>{ observeRecords[b.id-1]=true; renderList(); updateProgress(); if(isPreloadComplete) switchModel(b.id); document.querySelectorAll('.bone-card').forEach(x=>x.classList.remove('active')); card.classList.add('active'); };
-        container.appendChild(card);
     });
 }
+
+const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
+    const loader = new GLTFLoader();
+    loader.setDRACOLoader(dracoLoader);
+
+    // 显示加载提示
+    const loadingText = document.createElement('div');
+    loadingText.style.position = 'absolute';
+    loadingText.style.top = '50%';
+    loadingText.style.left = '50%';
+    loadingText.style.transform = 'translate(-50%, -50%)';
+    loadingText.style.color = '#fff';
+    loadingText.style.background = 'rgba(0,0,0,0.6)';
+    loadingText.style.padding = '10px 20px';
+    loadingText.style.borderRadius = '20px';
+    loadingText.style.display = 'none';
+    loadingText.id = 'modelLoadingStatus';
+    document.querySelector('.model-container').appendChild(loadingText);
+
+    function showLoading(msg) { loadingText.innerText = msg; loadingText.style.display = 'block'; }
+    function hideLoading() { loadingText.style.display = 'none'; }
+
+    function switchModel(id){
+        while(modelGroup.children.length) modelGroup.remove(modelGroup.children[0]);
+        
+        if (modelCache[id]) {
+            modelGroup.add(modelCache[id].clone());
+            return;
+        }
+
+        const b = bonesData.find(x => x.id === id);
+        if (!b) return;
+
+        showLoading(`⏳ 正在加载${b.name}...`);
+        loader.load(b.modelPath, gltf => {
+            let model = gltf.scene;
+            if(b.id === 6){ model.rotateY(Math.PI / 2); model.rotateY(Math.PI); }
+            const box = new THREE.Box3().setFromObject(model);
+            const center = box.getCenter(new THREE.Vector3());
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const finalScale = (1.0 / maxDim) * MODEL_SCALE;
+            model.scale.setScalar(finalScale);
+            model.position.sub(center.multiplyScalar(finalScale));
+            model.position.y += 0.2;
+            
+            modelCache[id] = model;
+            modelGroup.add(model.clone());
+            hideLoading();
+        }, undefined, err => {
+            console.error(`模型${id}加载失败`, err);
+            hideLoading();
+        });
+    }
+    function renderList(){
+        const container = document.getElementById('bonesListContainer');
+        container.innerHTML = '';
+        bonesData.forEach(b=>{
+            const card = document.createElement('div');
+            card.className = 'bone-card';
+            const ok = observeRecords[b.id-1];
+            card.innerHTML = `<div class="bone-thumb"><img src="${b.thumbUrl}"></div><div class="bone-number">${b.id}</div><div class="observe-badge">${ok?'✅已观察':'👀未观察'}</div>`;
+            card.onclick = ()=>{ 
+                observeRecords[b.id-1]=true; 
+                renderList(); 
+                updateProgress(); 
+                switchModel(b.id); 
+                document.querySelectorAll('.bone-card').forEach(x=>x.classList.remove('active')); 
+                card.classList.add('active'); 
+            };
+            container.appendChild(card);
+        });
+    }
 function updateProgress(){ const cnt = observeRecords.filter(Boolean).length; document.getElementById('observeStatusMsg').innerText = `👀 观察进度: ${cnt}/11`; }
 
 // 重置分类：将所有骨骼移回左侧列表
@@ -1103,26 +1101,28 @@ function setupFullModelControls(){
 }
 
 function initGroupSelection(){
-    const overlay = document.getElementById('groupSelectOverlay');
-    document.getElementById('confirmGroupBtn').onclick = ()=>{
-        let val = parseInt(document.getElementById('groupSelectInput').value);
-        if(isNaN(val)) val = 1;
-        if(val<1) val=1;
-        if(val>23) val=23;
-        currentGroup = val;
-        document.getElementById('groupDisplay').innerText = `🎯 小组: ${currentGroup}`;
-        overlay.style.display = 'none';
-        document.getElementById('appContainer').style.display = 'flex';
-        const toolbar = document.querySelector('.toolbar');
-        if(toolbar) toolbar.style.display = 'flex';
-        initThree();
-        setupModelControls();
-        renderList();
-        updateProgress();
-        preloadAllModels();
-    };
-    setupFullModelControls(); // 提前初始化完整模型相关的控制逻辑，支持首页按钮
-}
+        const overlay = document.getElementById('groupSelectOverlay');
+        document.getElementById('confirmGroupBtn').onclick = ()=>{
+            let val = parseInt(document.getElementById('groupSelectInput').value);
+            if(isNaN(val)) val = 1;
+            if(val<1) val=1;
+            if(val>23) val=23;
+            currentGroup = val;
+            document.getElementById('groupDisplay').innerText = `🎯 小组: ${currentGroup}`;
+            overlay.style.display = 'none';
+            document.getElementById('appContainer').style.display = 'flex';
+            const toolbar = document.querySelector('.toolbar');
+            if(toolbar) toolbar.style.display = 'flex';
+            initThree();
+            setupModelControls();
+            renderList();
+            updateProgress();
+            
+            // 初始只加载第一个骨骼模型
+            switchModel(1);
+        };
+        setupFullModelControls(); // 提前初始化完整模型相关的控制逻辑，支持首页按钮
+    }
 
 document.getElementById('enterClassifyBtn').onclick = ()=>{
     if(observeRecords.filter(Boolean).length < 11 && !confirm("还没观察完所有模型，确定进入分类？")) return;
