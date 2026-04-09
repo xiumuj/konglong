@@ -13,6 +13,7 @@
         }
     </script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
     <style>
         * {
             box-sizing: border-box;
@@ -696,12 +697,15 @@ const AUTO_ROTATE_SPEED = 0.005;
 let fullModelCache = null; // 缓存完整模型
 
 // 提交结果到后端 (后端只保存第一次)
-async function submitResult(groupId, isCorrect) {
+async function submitResult(groupId, isCorrect, screenshot = null) {
     try {
+        const payload = { groupId, success: isCorrect, timestamp: Date.now() };
+        if (screenshot) payload.screenshot = screenshot;
+
         const response = await fetch(`${API_URL}/api/submit`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ groupId, success: isCorrect, timestamp: Date.now() })
+            body: JSON.stringify(payload)
         });
         const data = await response.json();
         if (!response.ok) {
@@ -1034,7 +1038,24 @@ async function submit(){
     if(submitBtn.disabled) { alert("请先将所有骨骼拖拽到右侧分类区域！"); return; }
     
     const isCorrect = checkAnswer();
-    await submitResult(currentGroup, isCorrect);
+    
+    let screenshot = null;
+    if (!isCorrect) {
+        // 分类错误时，截取五个分类框的图片
+        const grid = document.getElementById('categoriesGrid');
+        try {
+            const canvas = await html2canvas(grid, {
+                backgroundColor: '#f9f1e0', // 匹配背景色
+                scale: 1 // 压缩比例，1表示原始比例
+            });
+            // 转换为 jpeg 并压缩质量
+            screenshot = canvas.toDataURL('image/jpeg', 0.6);
+        } catch (e) {
+            console.error('截图失败:', e);
+        }
+    }
+
+    await submitResult(currentGroup, isCorrect, screenshot);
     
     const modal = document.getElementById('resultModal');
     const titleDiv = document.getElementById('resultTitle');

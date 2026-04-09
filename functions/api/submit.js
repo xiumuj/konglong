@@ -11,9 +11,11 @@ export async function onRequestPost(context) {
     const groupId = String(data.groupId);
     const success = !!data.success;
     const timestamp = data.timestamp || Date.now();
+    const screenshot = data.screenshot || null;
 
     // 更新 KV：如果已存在，则更新为最新状态；如果不存在，则创建。
     const result = { success, timestamp };
+    if (screenshot) result.screenshot = screenshot;
     await env.RESULTS_KV.put(groupId, JSON.stringify(result));
 
     return new Response(JSON.stringify({ ok: true }), {
