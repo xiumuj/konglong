@@ -761,17 +761,23 @@ function onResize(){
     const container = document.querySelector('.model-container');
     if(container && renderer && camera){
         const w = container.clientWidth, h = container.clientHeight;
-        renderer.setSize(w, h);
-        camera.aspect = w/h;
-        camera.updateProjectionMatrix();
+        if (w > 0 && h > 0) {
+            renderer.setSize(w, h);
+            camera.aspect = w/h;
+            camera.updateProjectionMatrix();
+        }
     }
     // 完整模型模式的画布自适应
     const fullContainer = document.querySelector('.full-model-canvas-container');
     if(fullContainer && fullRenderer && fullCamera){
         const fw = fullContainer.clientWidth, fh = fullContainer.clientHeight;
-        fullRenderer.setSize(fw, fh);
-        fullCamera.aspect = fw/fh;
-        fullCamera.updateProjectionMatrix();
+        if (fw > 0 && fh > 0) {
+            fullRenderer.setSize(fw, fh);
+            fullCamera.aspect = fw/fh;
+            fullCamera.updateProjectionMatrix();
+            // 立即强制渲染一帧，防止黑屏
+            fullRenderer.render(fullScene, fullCamera);
+        }
     }
 }
 
@@ -813,6 +819,7 @@ function initFullModel(){
     backLight.position.set(0, 2, -4);
     fullScene.add(backLight);
 
+    window.addEventListener('resize', onResize);
     animateFullModel();
     loadFullModel();
 }
@@ -1137,8 +1144,27 @@ function setupFullModelControls(){
         document.getElementById('viewFullModelBtn').style.display = 'none';
         
         // 初始化
-        if(!fullScene) initFullModel();
+        if(!fullScene) {
+            initFullModel();
+        } else {
+            // 如果已经初始化过，重置相机和视角，确保用户能看到模型
+            if(fullCamera) {
+                fullCamera.position.set(1.5, 1.2, 2.8);
+                if(fullControls) {
+                    fullControls.target.set(0, 0.2, 0);
+                    fullControls.update();
+                }
+            }
+            // 确保模型加载到场景中
+            loadFullModel();
+        }
+        
+        // 多次强制刷新布局和渲染，确保在各种环境下可见
+        onResize();
         setTimeout(onResize, 50);
+        setTimeout(onResize, 150);
+        setTimeout(onResize, 300);
+        setTimeout(onResize, 500);
     };
 
     // 首页按钮进入
