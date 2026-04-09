@@ -627,7 +627,7 @@
     <!-- 完整模型视图：集成 index1.html 功能 -->
     <div id="fullModelView" class="view">
         <div class="full-model-layout">
-            <button class="full-model-back-btn" id="fullModelBackBtn">🔙 返回分类</button>
+            <button class="full-model-back-btn" id="fullModelBackBtn">🔙 返回首页</button>
             <div class="full-model-canvas-container">
                 <div id="fullModelLoadingStatus" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.6); color: white; padding: 12px 24px; border-radius: 30px; z-index: 10; display: none;">⏳ 正在加载完整模型...</div>
                 <canvas id="fullModelCanvas"></canvas>
@@ -761,23 +761,17 @@ function onResize(){
     const container = document.querySelector('.model-container');
     if(container && renderer && camera){
         const w = container.clientWidth, h = container.clientHeight;
-        if (w > 0 && h > 0) {
-            renderer.setSize(w, h);
-            camera.aspect = w/h;
-            camera.updateProjectionMatrix();
-        }
+        renderer.setSize(w, h);
+        camera.aspect = w/h;
+        camera.updateProjectionMatrix();
     }
     // 完整模型模式的画布自适应
     const fullContainer = document.querySelector('.full-model-canvas-container');
     if(fullContainer && fullRenderer && fullCamera){
         const fw = fullContainer.clientWidth, fh = fullContainer.clientHeight;
-        if (fw > 0 && fh > 0) {
-            fullRenderer.setSize(fw, fh);
-            fullCamera.aspect = fw/fh;
-            fullCamera.updateProjectionMatrix();
-            // 立即强制渲染一帧，防止黑屏
-            fullRenderer.render(fullScene, fullCamera);
-        }
+        fullRenderer.setSize(fw, fh);
+        fullCamera.aspect = fw/fh;
+        fullCamera.updateProjectionMatrix();
     }
 }
 
@@ -819,7 +813,6 @@ function initFullModel(){
     backLight.position.set(0, 2, -4);
     fullScene.add(backLight);
 
-    window.addEventListener('resize', onResize);
     animateFullModel();
     loadFullModel();
 }
@@ -1127,11 +1120,10 @@ function setupFullModelControls(){
         lastViewBeforeFullModel = from;
         const backBtn = document.getElementById('fullModelBackBtn');
         const toolbar = document.querySelector('.toolbar');
-        if (from === 'home') {
-            backBtn.innerText = '🔙 返回首页';
-        } else {
-            backBtn.innerText = '🔙 返回分类';
-        }
+        
+        // 统一返回按钮文字为返回首页
+        backBtn.innerText = '🔙 返回首页';
+        
         // 进入全屏模型视图时隐藏顶栏
         if(toolbar) toolbar.style.display = 'none';
 
@@ -1143,28 +1135,14 @@ function setupFullModelControls(){
         // 隐藏可能显示的浮动按钮
         document.getElementById('viewFullModelBtn').style.display = 'none';
         
-        // 初始化
-        if(!fullScene) {
-            initFullModel();
-        } else {
-            // 如果已经初始化过，重置相机和视角，确保用户能看到模型
-            if(fullCamera) {
-                fullCamera.position.set(1.5, 1.2, 2.8);
-                if(fullControls) {
-                    fullControls.target.set(0, 0.2, 0);
-                    fullControls.update();
-                }
-            }
-            // 确保模型加载到场景中
-            loadFullModel();
-        }
+        // 初始化场景
+        if(!fullScene) initFullModel();
         
-        // 多次强制刷新布局和渲染，确保在各种环境下可见
-        onResize();
+        // 显式触发模型加载/检查逻辑，确保模型在场景中
+        loadFullModel();
+        
+        // 延迟触发尺寸重置，确保画布占满空间
         setTimeout(onResize, 50);
-        setTimeout(onResize, 150);
-        setTimeout(onResize, 300);
-        setTimeout(onResize, 500);
     };
 
     // 首页按钮进入
@@ -1178,21 +1156,14 @@ function setupFullModelControls(){
         enterFullModel('classifyView');
     };
 
-    // 从完整模型视图返回
+    // 从完整模型视图返回：统一返回首页
     document.getElementById('fullModelBackBtn').onclick = ()=>{
         document.getElementById('fullModelView').classList.remove('active');
+        document.getElementById('appContainer').style.display = 'none';
+        document.getElementById('groupSelectOverlay').style.display = 'flex';
         
         const toolbar = document.querySelector('.toolbar');
-        if (lastViewBeforeFullModel === 'home') {
-            document.getElementById('appContainer').style.display = 'none';
-            document.getElementById('groupSelectOverlay').style.display = 'flex';
-            if(toolbar) toolbar.style.display = 'none';
-        } else {
-            document.getElementById('classifyView').classList.add('active');
-            document.getElementById('viewFullModelBtn').style.display = 'block';
-            // 返回分类页面时保持顶栏隐藏
-            if(toolbar) toolbar.style.display = 'none';
-        }
+        if(toolbar) toolbar.style.display = 'none';
     };
 }
 
