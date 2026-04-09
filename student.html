@@ -685,6 +685,7 @@ let scene, camera, renderer, controls, modelGroup;
 const modelCache = {};
 let observeRecords = new Array(11).fill(false);
 const MODEL_SCALE = 1.9;
+let currentBoneId = 1; // 跟踪当前正在查看的骨骼ID
 
 // --- 完整模型变量 (集成 index1.html) ---
 let fullScene, fullCamera, fullRenderer, fullControls, fullModelGroup;
@@ -860,7 +861,6 @@ const dracoLoader = new DRACOLoader();
     const loader = new GLTFLoader();
     loader.setDRACOLoader(dracoLoader);
 
-    // 显示加载提示
     const loadingText = document.createElement('div');
     loadingText.style.position = 'absolute';
     loadingText.style.top = '50%';
@@ -877,7 +877,43 @@ const dracoLoader = new DRACOLoader();
     function showLoading(msg) { loadingText.innerText = msg; loadingText.style.display = 'block'; }
     function hideLoading() { loadingText.style.display = 'none'; }
 
+    // 模型加载状态跟踪
+    const modelLoadingPromises = {};
+
+    function loadModel(id) {
+        if (modelCache[id]) return Promise.resolve(modelCache[id]);
+        if (modelLoadingPromises[id]) return modelLoadingPromises[id];
+
+        const b = bonesData.find(x => x.id === id);
+        if (!b) return Promise.reject('未找到模型数据');
+
+        modelLoadingPromises[id] = new Promise((resolve, reject) => {
+            loader.load(b.modelPath, gltf => {
+                let model = gltf.scene;
+                if(b.id === 6){ model.rotateY(Math.PI / 2); model.rotateY(Math.PI); }
+                const box = new THREE.Box3().setFromObject(model);
+                const center = box.getCenter(new THREE.Vector3());
+                const size = box.getSize(new THREE.Vector3());
+                const maxDim = Math.max(size.x, size.y, size.z);
+                const finalScale = (1.0 / maxDim) * MODEL_SCALE;
+                model.scale.setScalar(finalScale);
+                model.position.sub(center.multiplyScalar(finalScale));
+                model.position.y += 0.2;
+                
+                modelCache[id] = model;
+                resolve(model);
+            }, undefined, err => {
+                console.error(`模型${id}加载失败`, err);
+                modelLoadingPromises[id] = null; // 允许重试
+                reject(err);
+            });
+        });
+
+        return modelLoadingPromises[id];
+    }
+
     function switchModel(id){
+        currentBoneId = id; // 更新全局当前ID
         while(modelGroup.children.length) modelGroup.remove(modelGroup.children[0]);
         
         if (modelCache[id]) {
@@ -886,44 +922,57 @@ const dracoLoader = new DRACOLoader();
         }
 
         const b = bonesData.find(x => x.id === id);
-        if (!b) return;
-
-        showLoading(`⏳ 正在加载${b.name}...`);
-        loader.load(b.modelPath, gltf => {
-            let model = gltf.scene;
-            if(b.id === 6){ model.rotateY(Math.PI / 2); model.rotateY(Math.PI); }
-            const box = new THREE.Box3().setFromObject(model);
-            const center = box.getCenter(new THREE.Vector3());
-            const size = box.getSize(new THREE.Vector3());
-            const maxDim = Math.max(size.x, size.y, size.z);
-            const finalScale = (1.0 / maxDim) * MODEL_SCALE;
-            model.scale.setScalar(finalScale);
-            model.position.sub(center.multiplyScalar(finalScale));
-            model.position.y += 0.2;
-            
-            modelCache[id] = model;
-            modelGroup.add(model.clone());
+        showLoading(`⏳ 正在加载${b ? b.name : '模型'}...`);
+        
+        loadModel(id).then(model => {
             hideLoading();
-        }, undefined, err => {
-            console.error(`模型${id}加载失败`, err);
+            // 确保当前选中的依然是这个模型，防止快速点击时的竞争问题
+            if (currentBoneId === id) {
+                modelGroup.add(model.clone());
+            }
+        }).catch(err => {
             hideLoading();
+            console.error(err);
         });
+    }
+
+    // 静默后台预加载
+    function preloadAllModels() {
+        // 1. 预加载所有骨骼模型 (按顺序异步加载)
+        bonesData.forEach(b => {
+            loadModel(b.id).catch(() => {});
+        });
+
+        // 2. 预加载完整恐龙模型
+        if (!fullModelCache) {
+            loader.load(FULL_MODEL_PATH, (gltf) => {
+                const model = gltf.scene;
+                const box = new THREE.Box3().setFromObject(model);
+                const center = box.getCenter(new THREE.Vector3());
+                const size = box.getSize(new THREE.Vector3());
+                const maxDim = Math.max(size.x, size.y, size.z);
+                const finalScale = (1.0 / maxDim) * FULL_MODEL_SCALE;
+                
+                model.scale.setScalar(finalScale);
+                model.position.sub(center.multiplyScalar(finalScale));
+                model.position.y += 0.2;
+                fullModelCache = model;
+            }, undefined, err => console.warn('后台预加载完整模型失败', err));
+        }
     }
     function renderList(){
         const container = document.getElementById('bonesListContainer');
         container.innerHTML = '';
         bonesData.forEach(b=>{
             const card = document.createElement('div');
-            card.className = 'bone-card';
+            card.className = 'bone-card' + (currentBoneId === b.id ? ' active' : '');
             const ok = observeRecords[b.id-1];
             card.innerHTML = `<div class="bone-thumb"><img src="${b.thumbUrl}"></div><div class="bone-number">${b.id}</div><div class="observe-badge">${ok?'✅已观察':'👀未观察'}</div>`;
             card.onclick = ()=>{ 
                 observeRecords[b.id-1]=true; 
+                switchModel(b.id); 
                 renderList(); 
                 updateProgress(); 
-                switchModel(b.id); 
-                document.querySelectorAll('.bone-card').forEach(x=>x.classList.remove('active')); 
-                card.classList.add('active'); 
             };
             container.appendChild(card);
         });
@@ -1117,10 +1166,12 @@ function initGroupSelection(){
             setupModelControls();
             renderList();
             updateProgress();
-            
-            // 初始只加载第一个骨骼模型
-            switchModel(1);
-        };
+             
+             // 初始加载第一个模型
+             switchModel(1);
+             // 静默预加载其他所有模型
+             preloadAllModels();
+         };
         setupFullModelControls(); // 提前初始化完整模型相关的控制逻辑，支持首页按钮
     }
 
