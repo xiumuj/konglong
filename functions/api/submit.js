@@ -15,12 +15,12 @@ export async function onRequestPost(context) {
 
     const raw = await env.RESULTS_KV.get('all_results');
     const results = raw ? JSON.parse(raw) : {};
-
-    const result = { success, timestamp };
-    if (screenshot) result.screenshot = screenshot;
-    results[groupId] = result;
-
+    results[groupId] = { success, timestamp };
     await env.RESULTS_KV.put('all_results', JSON.stringify(results));
+
+    if (screenshot) {
+      await env.RESULTS_KV.put(`screenshot_${groupId}`, screenshot);
+    }
 
     return new Response(JSON.stringify({ ok: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

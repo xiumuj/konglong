@@ -88,11 +88,25 @@
     const modalTitle = document.getElementById('modalTitle');
     const closeModal = document.getElementById('closeModal');
 
-    window.viewError = function(groupId, screenshot) {
-        if (!screenshot) return;
+    window.viewError = async function(groupId) {
         modalTitle.innerText = `小组 ${groupId} 的错误分类截图`;
-        modalImg.src = screenshot;
+        modalImg.src = '';
+        modalImg.alt = '加载中...';
         modal.style.display = 'flex';
+        try {
+            const res = await fetch(`${API_URL}/api/screenshot?groupId=${encodeURIComponent(groupId)}`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            if (data.screenshot) {
+                modalImg.src = data.screenshot;
+                modalImg.alt = '错误分类截图';
+            } else {
+                modalImg.alt = '截图未找到';
+            }
+        } catch(e) {
+            console.error('获取截图失败:', e);
+            modalImg.alt = '加载失败';
+        }
     };
 
     closeModal.onclick = () => modal.style.display = 'none';
@@ -121,12 +135,7 @@
                     if (data.success) {
                         statusHtml = '<span class="badge-correct">✓ 分类正确</span>';
                     } else {
-                        // 如果有截图，则显示为可点击按钮
-                        if (data.screenshot) {
-                            statusHtml = `<button class="badge-wrong" onclick="viewError('${groupId}', '${data.screenshot}')">✗ 分类错误 (查看截图)</button>`;
-                        } else {
-                            statusHtml = '<span class="badge-wrong">✗ 分类错误</span>';
-                        }
+                        statusHtml = `<button class="badge-wrong" onclick="viewError('${groupId}')">✗ 分类错误 (查看截图)</button>`;
                     }
                     tr.innerHTML = `<td><strong>${groupId}</strong></td><td>${statusHtml}</td><td>${timeStr}</td>`;
                     tbody.appendChild(tr);
