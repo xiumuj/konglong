@@ -13,10 +13,23 @@ export async function onRequestPost(context) {
     const timestamp = data.timestamp || Date.now();
     const screenshot = data.screenshot || null;
 
-    // 更新 KV：如果已存在，则更新为最新状态；如果不存在，则创建。
     const result = { success, timestamp };
     if (screenshot) result.screenshot = screenshot;
     await env.RESULTS_KV.put(groupId, JSON.stringify(result));
+
+    const keysListStr = await env.RESULTS_KV.get('keys_list');
+    let keysList = [];
+    if (keysListStr) {
+      try {
+        keysList = JSON.parse(keysListStr);
+      } catch (e) {
+        keysList = [];
+      }
+    }
+    if (!keysList.includes(groupId)) {
+      keysList.push(groupId);
+      await env.RESULTS_KV.put('keys_list', JSON.stringify(keysList));
+    }
 
     return new Response(JSON.stringify({ ok: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -7,10 +7,15 @@ export async function onRequestPost(context) {
   };
 
   try {
-    const list = await env.RESULTS_KV.list();
-    for (const key of list.keys) {
-      await env.RESULTS_KV.delete(key.name);
+    const keysListStr = await env.RESULTS_KV.get('keys_list');
+    const keysList = keysListStr ? JSON.parse(keysListStr) : [];
+    
+    for (const key of keysList) {
+      await env.RESULTS_KV.delete(key);
     }
+    
+    await env.RESULTS_KV.delete('keys_list');
+
     return new Response(JSON.stringify({ ok: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

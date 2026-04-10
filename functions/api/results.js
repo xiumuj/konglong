@@ -7,12 +7,14 @@ export async function onRequestGet(context) {
   };
 
   try {
-    const list = await env.RESULTS_KV.list();
+    const keysListStr = await env.RESULTS_KV.get('keys_list');
+    const keysList = keysListStr ? JSON.parse(keysListStr) : [];
+    
     const results = {};
-    for (const key of list.keys) {
-      const val = await env.RESULTS_KV.get(key.name);
+    for (const key of keysList) {
+      const val = await env.RESULTS_KV.get(key);
       if (val) {
-        results[key.name] = JSON.parse(val);
+        results[key] = JSON.parse(val);
       }
     }
     return new Response(JSON.stringify({ results }), {
