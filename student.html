@@ -1061,25 +1061,15 @@ async function submit(){
     
     let screenshot = null;
     if (!isCorrect) {
+        // 分类错误时，截取五个分类框的图片
         const grid = document.getElementById('categoriesGrid');
         try {
             const canvas = await html2canvas(grid, {
-                backgroundColor: '#f9f1e0',
-                scale: 0.5,
-                useCORS: true,
-                logging: false
+                backgroundColor: '#f9f1e0', // 匹配背景色
+                scale: 1 // 压缩比例，1表示原始比例
             });
-            const maxW = 400;
-            if (canvas.width > maxW) {
-                const ratio = maxW / canvas.width;
-                const tmp = document.createElement('canvas');
-                tmp.width = maxW;
-                tmp.height = Math.round(canvas.height * ratio);
-                tmp.getContext('2d').drawImage(canvas, 0, 0, tmp.width, tmp.height);
-                screenshot = tmp.toDataURL('image/jpeg', 0.3);
-            } else {
-                screenshot = canvas.toDataURL('image/jpeg', 0.3);
-            }
+            // 转换为 jpeg 并压缩质量
+            screenshot = canvas.toDataURL('image/jpeg', 0.6);
         } catch (e) {
             console.error('截图失败:', e);
         }

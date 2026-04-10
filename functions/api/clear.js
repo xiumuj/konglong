@@ -7,13 +7,10 @@ export async function onRequestPost(context) {
   };
 
   try {
-    await env.RESULTS_KV.delete('all_results');
-
-    const list = await env.RESULTS_KV.list({ prefix: 'screenshot_' });
+    const list = await env.RESULTS_KV.list();
     for (const key of list.keys) {
       await env.RESULTS_KV.delete(key.name);
     }
-
     return new Response(JSON.stringify({ ok: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -25,6 +22,7 @@ export async function onRequestPost(context) {
   }
 }
 
+// 允许跨域
 export async function onRequestOptions() {
   return new Response(null, {
     headers: {
