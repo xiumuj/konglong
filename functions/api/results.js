@@ -7,14 +7,8 @@ export async function onRequestGet(context) {
   };
 
   try {
-    const list = await env.RESULTS_KV.list();
-    const results = {};
-    for (const key of list.keys) {
-      const val = await env.RESULTS_KV.get(key.name);
-      if (val) {
-        results[key.name] = JSON.parse(val);
-      }
-    }
+    const raw = await env.RESULTS_KV.get('all_results');
+    const results = raw ? JSON.parse(raw) : {};
     return new Response(JSON.stringify({ results }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -26,7 +20,6 @@ export async function onRequestGet(context) {
   }
 }
 
-// 允许跨域
 export async function onRequestOptions() {
   return new Response(null, {
     headers: {

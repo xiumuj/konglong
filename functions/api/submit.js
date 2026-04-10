@@ -13,10 +13,14 @@ export async function onRequestPost(context) {
     const timestamp = data.timestamp || Date.now();
     const screenshot = data.screenshot || null;
 
-    // 更新 KV：如果已存在，则更新为最新状态；如果不存在，则创建。
+    const raw = await env.RESULTS_KV.get('all_results');
+    const results = raw ? JSON.parse(raw) : {};
+
     const result = { success, timestamp };
     if (screenshot) result.screenshot = screenshot;
-    await env.RESULTS_KV.put(groupId, JSON.stringify(result));
+    results[groupId] = result;
+
+    await env.RESULTS_KV.put('all_results', JSON.stringify(results));
 
     return new Response(JSON.stringify({ ok: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -29,7 +33,6 @@ export async function onRequestPost(context) {
   }
 }
 
-// 允许跨域
 export async function onRequestOptions() {
   return new Response(null, {
     headers: {
